@@ -19,12 +19,11 @@ head(dane)
 id = dane[,1]
 sire = dane[,2]
 dam = dane[,3]
-# zamiana rodzico m?odszych od potomstwa na warto?ci NA 
+# zamiana rodzicow mlodszych od potomstwa na wartosci NA 
 sire[wrong_sire] = NA
 dam[wrong_dam] = NA
 
-# tworzymy obiekt pedigree, a nast?pnie
-# Macierz A - macierz spokrewnien - estymacja macierzy spokrewnie? 
+# tworzymy obiekt pedigree, a nastepnie maerz A - macierz spokrewnien - estymacja macierzy spokrewnie? 
 library(pedigreemm)
 ped = pedigree(sire = sire, dam = dam, label = id)
 (A = as.matrix(getA(ped)))
