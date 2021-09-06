@@ -23,12 +23,12 @@ dam = dane[,3]
 sire[wrong_sire] = NA
 dam[wrong_dam] = NA
 
-# tworzymy obiekt pedigree, a nastepnie maerz A - macierz spokrewnien - estymacja macierzy spokrewnie? 
+# tworzymy obiekt pedigree, a nastepnie macierz A - macierz spokrewnien - estymacja macierzy spokrewnien
 library(pedigreemm)
 ped = pedigree(sire = sire, dam = dam, label = id)
 (A = as.matrix(getA(ped)))
 
-# tworzymy macierz wyst?pie? dla efektu sta?ego (p?e?)
+# tworzymy macierz wystapien dla efektu stalego (plec)
 y = as.matrix(dane[,5])
 t(y)
 sex = matrix(dane[,4])
@@ -42,11 +42,10 @@ Z = diag(1000)
 # odwrocona macierz A
 Aginv <- ginv(A) 
 
-
 sigma_k = 0.3
 sigma_e = 0.7
 
-# Uk?ad r?wna? mieszanych - model osobniczy 
+# Uklad rownan mieszanych - model osobniczy 
 mme = function(y, X, Z, Aginv, sigma_k, sigma_e) {
   G = Aginv * c(sigma_e)/c(sigma_k)
   c11 = t(X)%*%X
@@ -60,7 +59,7 @@ mme = function(y, X, Z, Aginv, sigma_k, sigma_e) {
   list(C = C, invC = invC, est = mme)
 }
 
-# Funkcja do modelu - estymacja parametr?w wariancji 
+# Funkcja do modelu - estymacja parametrow wariancji 
 EM = function(y, X, Z, Aginv, sigma_k, sigma_e) {
   n = nrow(X)
   n_X = ncol(X)
@@ -101,7 +100,7 @@ sigma_e <- 7.212785
 
 mme_osobniczy <-mme(y, X, Z, A, sigma_k, sigma_e)
 
-# dok?adno?? warto?ci hodowlanych 
+# dokladnosc wartosci hodowlanych 
 C = as.matrix(mme_osobniczy$C)
 invC = ginv(C)
 invC22 = invC[1:1000, 1:1000]
@@ -116,15 +115,13 @@ invC = ginv(C)
 invC22 = invC[3:1000, 3:1000] # co tu wpisac
 r2 = diag(1 - invC22*2)
 
-# oddziedziczalno?? cechy 
+# oddziedziczalnosc cechy 
 h2 = sigma_k/(sigma_k+sigma_e)
 h2
 
 # test Walda 
-# H0: nie wyst?puje istotno?? w estymatorach w przypadku p?ci
-# H1: wyst?puje istotno?? w estymatorach w przypadku p?ci
-
-# Hipoteza jest dwustronna, wi?c przy obliczaniu p-val mno?ymy razy 2
+# H0: nie wystepuje istotnosc w estymatorach w przypadku plci
+# H1: wystepuje istotnosc w estymatorach w przypadku plci
 
 G = A*sigma_k
 R = diag(1000)*sigma_e
@@ -137,7 +134,7 @@ seB = sqrt(diag(varB))
 (testWalda = mme(y, X, Z, A, sigma_k, sigma_e)$est[1:2] / seB)
 (p_value = 2*pnorm(abs(testWalda), lower.tail = FALSE))
 
-# p < ???? - odrzucamy hipotez? zerow?
+# odrzucamy hipoteze zerowe
 
 # model mieszany - ojcowski 
 unique_sire <-sort(unique(sire)[2:1000])
