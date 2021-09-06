@@ -1,0 +1,162 @@
+# wczytanie danych 
+dane <- read.csv("C:/Users/Justyna/Desktop/dane.csv", sep = ";", header = F)
+#names(dane) <- c('ID', 'fid', 'mid', 'sex', 'wartosc fenotypowa cech')
+# View(dane)
+# fid -> id ojca
+# mid -> id matki
+
+library(pedigreemm)
+library(MASS)
+library(Morpho)
+# pierwsze 1000 obserwacji 
+dane <- dane[1:1000,]
+head(dane)
+
+# sprawdzenie, kt0rzy rodzice sa mlodsi od potomstwa, ktore numery potomstwa sa mniejsz od ojca/matki
+(wrong_sire = which(dane[,1] < dane[,2]))
+(wrong_dam = which(dane[,1] < dane[,3]))
+
+id = dane[,1]
+sire = dane[,2]
+dam = dane[,3]
+# zamiana rodzico m?odszych od potomstwa na warto?ci NA 
+sire[wrong_sire] = NA
+dam[wrong_dam] = NA
+
+# tworzymy obiekt pedigree, a nast?pnie
+# Macierz A - macierz spokrewnien - estymacja macierzy spokrewnie? 
+library(pedigreemm)
+ped = pedigree(sire = sire, dam = dam, label = id)
+(A = as.matrix(getA(ped)))
+
+# tworzymy macierz wyst?pie? dla efektu sta?ego (p?e?)
+y = as.matrix(dane[,5])
+t(y)
+sex = matrix(dane[,4])
+X = matrix(0,1000,2)
+X[,1] = sex
+X[,2] = 1-sex
+t(X)
+
+# tworzymy macierz identycznosciowa
+Z = diag(1000)
+# odwrocona macierz A
+Aginv <- ginv(A) 
+
+
+sigma_k = 0.3
+sigma_e = 0.7
+
+# Uk?ad r?wna? mieszanych - model osobniczy 
+mme = function(y, X, Z, Aginv, sigma_k, sigma_e) {
+  G = Aginv * c(sigma_e)/c(sigma_k)
+  c11 = t(X)%*%X
+  c12 = t(X)%*%Z
+  c21 = t(Z)%*%X
+  c22 = t(Z)%*%Z+G
+  C = rbind(cbind(c11,c12),cbind(c21,c22))
+  invC = ginv(C)
+  rhs = rbind(t(X)%*%y, t(Z)%*%y)
+  mme = invC%*%rhs
+  list(C = C, invC = invC, est = mme)
+}
+
+# Funkcja do modelu - estymacja parametr?w wariancji 
+EM = function(y, X, Z, Aginv, sigma_k, sigma_e) {
+  n = nrow(X)
+  n_X = ncol(X)
+  n_k = nrow(Aginv)
+  
+  t = 1 # iteration number
+  tmp = 0.1 # test for converange
+  
+  while(tmp > 0.001) {
+    mme_new = mme(y, X, Z, Aginv, sigma_k, sigma_e)
+    C_new = ginv(mme_new$C)
+    Ck = C_new[(n_X+1):(n_X+n_k), (n_X+1):(n_X+n_k)]
+    mme2 = mme_new$est
+    
+    k = as.matrix(mme2[(n_X+1):(n_X+n_k)])
+    sigma_k_new = (t(k)%*%Aginv%*%k + sum(diag(Aginv%*%Ck))*c(sigma_e))/n_k
+    
+    res = as.matrix(y - X%*%as.matrix(mme2[1:n_X]) - Z%*%as.matrix(mme2[(n_X+1):(n_X+n_k)]))
+    X.tmp1 = cbind(X,Z) %*% C_new
+    X.tmp2 = t(cbind(X,Z))
+    sigma_e_new = (t(res)%*%res + sum(diag(X.tmp1%*%X.tmp2))*c(sigma_e))/n
+    
+    tmp = max(abs(sigma_k - sigma_k_new), abs(sigma_e - sigma_e_new))
+    sigma_k = sigma_k_new
+    sigma_e = sigma_e_new
+    print(glue::glue("Iteration: [{t}]; Sigma_k = {sigma_k}; Sigma_e = {sigma_e};"))
+    t = t+1
+    cat(c(t,tmp), file = "Results.csv", append = TRUE)
+    cat("\n", file = "Results.csv", append = TRUE)
+  }
+  list(sigma_k = sigma_k, sigma_e = sigma_e)
+}
+
+EM(y, X, Z, Aginv, sigma_k, sigma_e)
+# wyestymowane sigmy :
+sigma_k <- 0.964659
+sigma_e <- 7.212785
+
+mme_osobniczy <-mme(y, X, Z, A, sigma_k, sigma_e)
+
+# dok?adno?? warto?ci hodowlanych 
+C = as.matrix(mme_osobniczy$C)
+invC = ginv(C)
+invC22 = invC[1:1000, 1:1000]
+(r2 = diag(1 - invC22*2))
+(r = sqrt(r2))
+head(mme_osobniczy$est)
+mean(r)
+head(r)
+
+C = as.matrix(MME$C)
+invC = ginv(C)
+invC22 = invC[3:1000, 3:1000] # co tu wpisac
+r2 = diag(1 - invC22*2)
+
+# oddziedziczalno?? cechy 
+h2 = sigma_k/(sigma_k+sigma_e)
+h2
+
+# test Walda 
+# H0: nie wyst?puje istotno?? w estymatorach w przypadku p?ci
+# H1: wyst?puje istotno?? w estymatorach w przypadku p?ci
+
+# Hipoteza jest dwustronna, wi?c przy obliczaniu p-val mno?ymy razy 2
+
+G = A*sigma_k
+R = diag(1000)*sigma_e
+V = Z%*%G%*%t(Z) + R
+V
+
+varB = ginv(t(X)%*%ginv(V)%*%X)
+seB = sqrt(diag(varB))
+
+(testWalda = mme(y, X, Z, A, sigma_k, sigma_e)$est[1:2] / seB)
+(p_value = 2*pnorm(abs(testWalda), lower.tail = FALSE))
+
+# p < ???? - odrzucamy hipotez? zerow?
+
+# model mieszany - ojcowski 
+unique_sire <-sort(unique(sire)[2:1000])
+A_sire <-as.matrix(A[unique_sire, unique_sire])
+invA_sire <-ginv(A_sire)
+sire1 = sire
+sire1[is.na(sire1)==TRUE]=0
+Z_sire <-model.matrix(~factor(sire1)-1)
+Z_sire = Z_sire[,-1]
+
+mme_ojcowski <-mme(y, X, Z_sire, A_sire, sigma_k, sigma_e)
+C =as.matrix(mme_ojcowski$C)
+invC =ginv(C)
+r2 =diag(1-invC*2)
+head(mme_ojcowski$est)
+r =sqrt(r2)
+mean(r)
+head(r)
+
+
+
