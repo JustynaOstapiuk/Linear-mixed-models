@@ -1,0 +1,113 @@
+# wczytanie danych 
+dane <- read.csv("C:/Users/Justyna/Desktop/DaneGen-1(2).csv", sep = ";", header = T)
+#names(dane) <- c('ID', 'fid', 'mid', 'sex', 'wartosc fenotypowa cech')
+# View(dane)
+# fid -> id ojca
+# mid -> id matki
+
+# ładujemy biblioteki 
+library(pedigreemm)
+library(MASS)
+library(Morpho)
+# pierwsze 1000 obserwacji 
+dane <- dane[1:1000,]
+head(dane)
+
+# sprawdzenie, którzy rodzice są młodsi od potomstwa, które numery potomstwa są mniejsze od ojca/matki
+(wrong_sire = which(dane[,1] < dane[,2]))
+(wrong_dam = which(dane[,1] < dane[,3]))
+
+id = dane[,1]
+sire = dane[,2]
+dam = dane[,3]
+# zamiana rodziców młodszych od potomstwa na wartości NA 
+sire[wrong_sire] = NA
+dam[wrong_dam] = NA
+
+# tworzymy obiekt pedigree, a następnie
+# Macierz A - macierz spokrewnien - estymacja macierzy spokrewnień 
+library(pedigreemm)
+ped = pedigree(sire = sire, dam = dam, label = id)
+(A = as.matrix(getA(ped)))
+
+# tworzymy macierz wystąpień dla efektu stałego (płeć)
+y = as.matrix(dane[,5])
+t(y)
+sex = matrix(dane[,4])
+X1 = matrix(0,1000,2)
+X1[,1] = sex
+X1[,2] = 1-sex
+t(X)
+
+# tworzymy macierz identycznosciowa
+Z = diag(1000)
+
+(X2 = dane$M1A_1+dane$M1A_2)
+
+for (i in 1:50) {
+  l1 = 2*i-1+6
+  l2 = 2*i+6
+  dane[,106+i] = dane[, l1] + dane[, l2]
+}
+
+(X = cbind(X1, X2))
+library(MASS)
+
+# wyestymowane sigmy :
+sigma_a <- 0.964659
+sigma_e <- 7.212785
+mme = function(y, X, Z, A, sigma_a, sigma_e) {
+  alpha = sigma_e / sigma_a
+  invA = ginv(A)
+  C = rbind(cbind(t(X)%*%X, t(X)%*%Z),
+            cbind(t(Z)%*%X, t(Z)%*%Z+invA*c(alpha)))
+  rhs = rbind(t(X)%*%y, t(Z)%*%y)
+  invC = ginv(C)
+  estimators = invC%*%rhs
+  list(mC = C, est = estimators)
+}
+
+mmm_genomowy <- mme(y, X, Z, A, sigma_a, sigma_e)
+
+# dokładność wartości hodowlanych 
+C = as.matrix(mme_genomowy$C)
+invC = ginv(C)
+invC22 = invC[1:1000, 1:1000]
+(r2 = diag(1 - invC22*2))
+(r = sqrt(r2))
+head(mme_osobniczy$est)
+mean(r)
+head(r)
+
+C = as.matrix(MME$C)
+invC = ginv(C)
+invC22 = invC[3:1000, 3:1000] # co tu wpisac
+r2 = diag(1 - invC22*2)
+
+# oddziedziczalność cechy 
+h2 = sigma_a/(sigma_k+sigma_e)
+h2
+
+# test Walda 
+# H0: nie występuje istotność w estymatorach w przypadku płci
+# H1: występuje istotność w estymatorach w przypadku płci
+
+G = A*sigma_a
+R = diag(1000)*sigma_e
+V = Z%*%G%*%t(Z) + R
+
+testWalda = 0
+p_value = 0
+for (i in 1:50) {
+  X2 = dane[, 106+i]
+  X = cbind(X1, X2)
+  varB = ginv(t(X)%*%ginv(V)%*%X)
+  seB = sqrt(diag(varB))
+  print(seB[3])
+  
+  testWalda[i] = mme(y, X, Z, A, 0.3*var(y), 0.7*var(y))$est[3] / seB[3]
+  p_value[i] = 2*pnorm(abs(testWalda[i]), lower.tail = F)
+}
+
+# odrzucamy hipotezę zerową
+
